@@ -12,14 +12,16 @@ from .sync import SyncedModelMixin
 
 class LimitExceededError(exceptions.APIException):
     status_code = status.HTTP_402_PAYMENT_REQUIRED
-    default_detail = 'limit exceeded'
+    default_detail = "limit exceeded"
 
 
 class LimitedNestedSyncedModelMixin(NestedModelMixin, SyncedModelMixin):
     parent_key_filter = None
 
     def get_limit(self, deleted):
-        limits = getattr(settings, 'REST_OFFLINESYNC', None) and settings.REST_OFFLINESYNC.get('OBJECT_LIMITS')
+        limits = getattr(
+            settings, "REST_OFFLINESYNC", None
+        ) and settings.REST_OFFLINESYNC.get("OBJECT_LIMITS")
         if not limits:
             return None
 
@@ -42,12 +44,14 @@ class LimitedNestedSyncedModelMixin(NestedModelMixin, SyncedModelMixin):
         if not del_limit:
             return False
 
-        filter_kwargs = {expr: self.kwargs[kwarg] for expr, kwarg in self.object_filters.items()}
-        filter_kwargs['deleted'] = True
+        filter_kwargs = {
+            expr: self.kwargs[kwarg] for expr, kwarg in self.object_filters.items()
+        }
+        filter_kwargs["deleted"] = True
 
         results = self.queryset.filter(**filter_kwargs)
         results = results.values(self.parent_key_filter)
-        results = results.annotate(ndel=Count('*'), oldest=Min('updated'))
+        results = results.annotate(ndel=Count("*"), oldest=Min("updated"))
         results = results.filter(ndel__gte=del_limit)
 
         if self.since is not None:
@@ -55,7 +59,7 @@ class LimitedNestedSyncedModelMixin(NestedModelMixin, SyncedModelMixin):
 
         return len(results) > 0
 
-    @decorators.list_route(suffix='Archive')
+    @decorators.action(detail=False, suffix="Archive")
     def deleted(self, request, *args, **kwargs):
         response = super().deleted(request, *args, **kwargs)
 
@@ -72,15 +76,21 @@ class LimitedNestedSyncedModelMixin(NestedModelMixin, SyncedModelMixin):
 
         object_type = self.queryset.model
 
-        child_set_name = object_type._meta.model_name + '_set'
+        child_set_name = object_type._meta.model_name + "_set"
         child_set = getattr(parent, child_set_name)
 
         if issubclass(object_type, TrackedModel):
             child_set = child_set.filter(deleted=False)
 
         if child_set.count() >= limit:
-            raise LimitExceededError('exceeded limit of %d %s per %s' %
-                                     (limit, object_type._meta.verbose_name_plural, parent._meta.verbose_name))
+            raise LimitExceededError(
+                "exceeded limit of %d %s per %s"
+                % (
+                    limit,
+                    object_type._meta.verbose_name_plural,
+                    parent._meta.verbose_name,
+                )
+            )
 
     def _evict_deleted_peers(self, instance):
         limit = self.get_limit(True)
@@ -88,10 +98,16 @@ class LimitedNestedSyncedModelMixin(NestedModelMixin, SyncedModelMixin):
             return
 
         filter_kwargs = {}
-        filter_kwargs[self.parent_key_filter] = getattr(instance, self.parent_key_filter)
-        filter_kwargs['deleted'] = True
+        filter_kwargs[self.parent_key_filter] = getattr(
+            instance, self.parent_key_filter
+        )
+        filter_kwargs["deleted"] = True
 
-        delete_ids = Subquery(self.queryset.filter(**filter_kwargs).order_by('-updated', '-id')[limit:].values('id'))
+        delete_ids = Subquery(
+            self.queryset.filter(**filter_kwargs)
+            .order_by("-updated", "-id")[limit:]
+            .values("id")
+        )
 
         delete_objs = self.queryset.filter(id__in=delete_ids)
         delete_objs.delete()
@@ -118,7 +134,9 @@ class LimitedNestedSyncedModelMixin(NestedModelMixin, SyncedModelMixin):
     @transaction.atomic(savepoint=False)
     def perform_update(self, serializer):
         if self.is_aggregate():
-            parent = self.locked_parent(serializer.validated_data[self.get_parent_name()])
+            parent = self.locked_parent(
+                serializer.validated_data[self.get_parent_name()]
+            )
 
             self._check_active_limits(parent)
 
