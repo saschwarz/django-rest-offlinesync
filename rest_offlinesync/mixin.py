@@ -1,8 +1,7 @@
 from collections import OrderedDict
 
 
-class ViewSetMixin(object):
-
+class ViewSetMixin:
     def get_queryset(self):
         return self.queryset
 

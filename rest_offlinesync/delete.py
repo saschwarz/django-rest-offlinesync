@@ -4,10 +4,8 @@ from .mixin import ViewSetMixin
 
 
 class DeletableModelMixin(ViewSetMixin):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.deleted_object = False
 
     def get_queryset(self):
@@ -18,7 +16,7 @@ class DeletableModelMixin(ViewSetMixin):
 
         return queryset
 
-    @decorators.list_route(suffix='Archive')
+    @decorators.action(methods=["get"], detail=False, suffix="Archive")
     def deleted(self, request, *args, **kwargs):
         self.deleted_object = True
         return self.list(request, *args, **kwargs)
