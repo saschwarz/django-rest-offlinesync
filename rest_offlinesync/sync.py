@@ -1,23 +1,22 @@
-import time
 import datetime
+import time
 from collections import OrderedDict
 
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone, dateparse
-from rest_framework import exceptions, status, decorators
+from django.utils import dateparse, timezone
+from rest_framework import decorators, exceptions, status
 
 from .delete import DeletableModelMixin
 
-
-DEFAULT_AT_PARAM = 'at'
-DEFAULT_SINCE_PARAM = 'since'
-DEFAULT_UNTIL_PARAM = 'until'
+DEFAULT_AT_PARAM = "at"
+DEFAULT_SINCE_PARAM = "since"
+DEFAULT_UNTIL_PARAM = "until"
 
 
 class ConflictError(exceptions.APIException):
     status_code = status.HTTP_409_CONFLICT
-    default_detail = 'conflict'
+    default_detail = "conflict"
 
 
 class SyncedModelMixin(DeletableModelMixin):
@@ -40,22 +39,24 @@ class SyncedModelMixin(DeletableModelMixin):
         timestamp_reprs = request.query_params.getlist(name)
 
         if len(timestamp_reprs) > 1:
-            raise exceptions.ValidationError({name: 'multiple timestamp values'})
+            raise exceptions.ValidationError({name: "multiple timestamp values"})
 
         if timestamp_reprs:
             timestamp = dateparse.parse_datetime(timestamp_reprs[0])
 
             if timestamp is None:
-                raise exceptions.ValidationError({name: 'invalid timestamp format'})
+                raise exceptions.ValidationError({name: "invalid timestamp format"})
             if timestamp.tzinfo is None:
-                raise exceptions.ValidationError({name: 'timestamp without timezone'})
+                raise exceptions.ValidationError({name: "timestamp without timezone"})
         else:
             timestamp = default
 
         return timestamp
 
     def _is_expired(self):
-        expiry_days = getattr(settings, 'REST_OFFLINESYNC', None) and settings.REST_OFFLINESYNC.get('DELETED_EXPIRY_DAYS')
+        expiry_days = getattr(
+            settings, "REST_OFFLINESYNC", None
+        ) and settings.REST_OFFLINESYNC.get("DELETED_EXPIRY_DAYS")
         if not expiry_days:
             return False
 
@@ -81,12 +82,13 @@ class SyncedModelMixin(DeletableModelMixin):
         self.since = self.get_timestamp(request, self.since_param)
         self.until = self.get_timestamp(request, self.until_param, timezone.now())
 
-        context = OrderedDict(((self.since_param, self.since),
-                               (self.until_param, self.until)))
+        context = OrderedDict(
+            ((self.since_param, self.since), (self.until_param, self.until))
+        )
 
         return self.decorated_list(SyncedModelMixin, context, request, *args, **kwargs)
 
-    @decorators.list_route(suffix='Archive')
+    @decorators.action(detail=False, suffix="Archive")
     def deleted(self, request, *args, **kwargs):
         response = super().deleted(request, *args, **kwargs)
 
@@ -105,21 +107,24 @@ class SyncedModelMixin(DeletableModelMixin):
                 break
 
             if instance.updated > now:
-                raise ValueError('updated timestamp is in the future')
+                raise ValueError("updated timestamp is in the future")
 
             time.sleep(0.001)
 
     def _init_write_conditions(self, request):
-        unsupported_conditions = [param for param in request.query_params
-                                  if param != self.at_param]
+        unsupported_conditions = [
+            param for param in request.query_params if param != self.at_param
+        ]
         if unsupported_conditions:
-            raise exceptions.ValidationError({cond: 'unsupported condition' for cond in unsupported_conditions})
+            raise exceptions.ValidationError(
+                {cond: "unsupported condition" for cond in unsupported_conditions}
+            )
 
         self.at = self.get_timestamp(request, self.at_param)
 
     def _check_write_conditions(self, instance):
         if self.at and instance.updated != self.at:
-                raise ConflictError()
+            raise ConflictError()
 
     @transaction.atomic(savepoint=False)
     def update(self, request, *args, **kwargs):
